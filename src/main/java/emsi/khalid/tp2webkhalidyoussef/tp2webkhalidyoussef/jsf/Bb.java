@@ -1,5 +1,6 @@
 package emsi.khalid.tp2webkhalidyoussef.tp2webkhalidyoussef.jsf;
 
+import emsi.khalid.tp2webkhalidyoussef.tp2webkhalidyoussef.llm.LlmClientPourGemini;
 import jakarta.faces.application.FacesMessage;
 import jakarta.faces.context.FacesContext;
 import jakarta.faces.model.SelectItem;
@@ -24,6 +25,9 @@ public class Bb implements Serializable {
     private StringBuilder conversation = new StringBuilder();
     @Inject
     private FacesContext facesContext;
+
+    @Inject
+    private LlmClientPourGemini llmClient;
 
     public Bb() {
     }
@@ -72,18 +76,23 @@ public class Bb implements Serializable {
             facesContext.addMessage(null, message);
             return null;
         }
-        // Entourer la réponse avec "||".
-        this.reponse = "||";
-        // Si la conversation n'a pas encore commencé, ajouter le rôle système au début de la réponse
-        if (this.conversation.isEmpty()) {
-            // Ajouter le rôle système au début de la réponse
-            this.reponse += roleSysteme.toUpperCase(Locale.FRENCH) + "\n";
-            // Invalide la liste pour changer le rôle système
-            this.roleSystemeChangeable = false;
+
+        try {
+            if (this.conversation.isEmpty() && this.roleSysteme != null && !this.roleSysteme.isBlank()) {
+                llmClient.setSystemRole(this.roleSysteme);
+                this.roleSystemeChangeable = false;
+            }
+            this.reponse = llmClient.poserQuestion(question);
+            afficherConversation();
+        }catch (Exception e) {
+            FacesMessage message = new FacesMessage(
+                    FacesMessage.SEVERITY_ERROR,
+                    "Problème de connexion avec l'API du LLM",
+                    "Erreur : " + e.getMessage()
+            );
+            facesContext.addMessage(null, message);
+            return null;
         }
-        this.reponse += question.toLowerCase(Locale.FRENCH) + "||";
-        // La conversation contient l'historique des questions-réponses depuis le début.
-        afficherConversation();
         return null;
     }
 
@@ -92,7 +101,9 @@ public class Bb implements Serializable {
     }
 
     private void afficherConversation() {
-        this.conversation.append("== User:\n").append(question).append("\n== Serveur:\n").append(reponse).append("\n");
+        this.conversation.append("== User:\n").append(question)
+                .append("\n== Serveur:\n").append(reponse)
+                .append("\n");
     }
 
     public List<SelectItem> getRolesSysteme() {
